@@ -8,21 +8,22 @@ import io
 import os
 import uuid
 
-
-MODEL_PATH = "models/best.pt"  
+MODEL_PATH = "models/best.pt"
 OUTPUT_DIR = "output"
 CONF_THRESHOLD = 0.5
 ALLOWED_CLASSES = ["pothole", "garbage"]
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+try:
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+except FileExistsError:
+    pass
 
 app = FastAPI(title="AI Complaint Validation API")
 model = YOLO(MODEL_PATH)
 
-
 @app.post("/validate-complaint")
 async def validate_complaint(image: UploadFile = File(...)):
-    # Try to open the uploaded image with PIL
     try:
         pil_img = Image.open(image.file).convert("RGB")
     except Exception:
@@ -48,24 +49,16 @@ async def validate_complaint(image: UploadFile = File(...)):
                     "bbox": {"x1": x1, "y1": y1, "x2": x2, "y2": y2}
                 })
 
-                # Annotate image
                 cv2.rectangle(img_np, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(
-                    img_np,
-                    cls_name,
-                    (x1, y1 - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.9,
-                    (0, 255, 0),
-                    2
+                    img_np, cls_name, (x1, y1 - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2
                 )
 
-    # Save annotated image
     image_id = f"{uuid.uuid4()}.jpg"
     image_path = os.path.join(OUTPUT_DIR, image_id)
     cv2.imwrite(image_path, cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR))
 
-    # Prepare response
     if detected_classes:
         return {
             "complaint_valid": True,
