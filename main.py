@@ -10,40 +10,30 @@ import uuid
 
 
 MODEL_PATH = "models/best.pt"  
-OUTPUT_DIR = "output"          
-CONF_THRESHOLD = 0.5            
-ALLOWED_CLASSES = ["pothole", "garbage"] 
+OUTPUT_DIR = "output"
+CONF_THRESHOLD = 0.5
+ALLOWED_CLASSES = ["pothole", "garbage"]
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
-app = FastAPI(title="AI Complaint Validation API")
 
-# Load YOLOv8 model
+app = FastAPI(title="AI Complaint Validation API")
 model = YOLO(MODEL_PATH)
 
-# ---------------- Routes ----------------
-@app.get("/")
-def root():
-    return {"message": "APP is working"}
 
 @app.post("/validate-complaint")
 async def validate_complaint(image: UploadFile = File(...)):
+    # Try to open the uploaded image with PIL
+    try:
+        pil_img = Image.open(image.file).convert("RGB")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid image file")
 
-    # Validate image type
-    if image.content_type not in ["image/jpeg", "image/jpg", "image/png"]:
-        raise HTTPException(status_code=400, detail="Invalid image format")
-
-    # Read image
-    img_bytes = await image.read()
-    pil_img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
     img_np = np.array(pil_img)
-
-    # Run YOLO detection
     results = model(img_np, conf=CONF_THRESHOLD, verbose=False)[0]
 
     detections = []
     detected_classes = set()
 
-    # Process results
     if results.boxes is not None:
         for box in results.boxes:
             cls_id = int(box.cls[0])
@@ -75,7 +65,7 @@ async def validate_complaint(image: UploadFile = File(...)):
     image_path = os.path.join(OUTPUT_DIR, image_id)
     cv2.imwrite(image_path, cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR))
 
-    # Build response
+    # Prepare response
     if detected_classes:
         return {
             "complaint_valid": True,
